@@ -32,6 +32,12 @@ inline fn hash(pix: Pixel) u8 {
         @intCast(u16, pix.a) * 11) % 64);
 }
 
+inline fn hashIfNeeded(table: [64]?Pixel, pix: Pixel) void {
+    const hashed = hash(pix);
+    if (table[hashed] == null)
+        table[hashed] = pix;
+}
+
 // END UTIL FUNCTIONS
 
 // EMITTER FUNCTIONS
@@ -120,10 +126,7 @@ pub fn enc(allocator: std.mem.Allocator, input: []Pixel, length: u32) []Pixel {
     }) {
         const currentPixel = input[index];
 
-        // keep the hash table up-to-date
-        const hashed = hash(currentPixel);
-        if (hashTable[hashed] == null)
-            hashTable[hashed] = currentPixel;
+        hashIfNeeded(hashTable, currentPixel);
 
         if (pixelsEq(previousPixel, currentPixel)) {
             runLength += 1;
@@ -155,12 +158,6 @@ pub fn enc(allocator: std.mem.Allocator, input: []Pixel, length: u32) []Pixel {
     }
 
     return output.items;
-}
-
-fn hashIfNeeded(table: [64]?Pixel, pix: Pixel) void {
-    const hashed = hash(pix);
-    if (table[hashed] == null)
-        table[hashed] = pix;
 }
 
 pub fn dec(allocator: std.mem.Allocator, input: []Pixel, length: u32) []Pixel {
