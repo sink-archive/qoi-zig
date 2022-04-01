@@ -1,6 +1,10 @@
 const std = @import("std");
 const qoi = @import("qoi.zig");
 
+inline fn strEq(str1: []const u8, str2: []const u8) bool {
+    return str.len == str2.len && std.mem.eql(u8, str1, str2);
+}
+
 pub fn main() anyerror!void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
@@ -11,16 +15,28 @@ pub fn main() anyerror!void {
     var args = try std.process.argsWithAllocator(allocator);
     if (!args.skip())
         unreachable; // ignore argv[0], crash if for some reason argv has 0 length
-    
+
     if (args.next(allocator)) |firstArg| {
-        if (firstArg == "enc" or firstArg == "dec") {
-            const encMode = firstArg == "enc";
-            // true = enc, false = dec
+        const encMode = strEq((try firstArg)[0..], "enc");
+        // true = enc, false = dec
+        if (encMode or strEq((try firstArg)[0..], "dec")) {
+            if (args.next(allocator)) |sourceRaw| {
+                if (args.next(allocator)) |destRaw| {
+                    const realSource = try std.fs.realpathAlloc(allocator, (try sourceRaw)[0..]);
+                    const realDest   = try std.fs.realpathAlloc(allocator, (try destRaw)[0..]);
 
-            if (args.next(allocator)) |sourcePath| {
-                if (args.next(alocator)) |thirdArg| {
-                    // std.fs.openFileAbsolute(absolute_path: []const u8, flags: OpenFlags) OpenError!File
+                    const source = try std.fs.openFileAbsolute(realSource, std.fs.File.OpenFlags{
+                        .read = true, .write = false
+                    });
+                    const dest = try std.fs.createFileAbsolute(realDest, std.fs.File.CreateFlags{
+                        .read = false,
+                        .truncate = false, // do not append
+                        .exclusive = false,
+                    });
 
+                    _ = source;
+                    _ = dest;
+                    _ = encMode;
                     return;
                 }
             }
