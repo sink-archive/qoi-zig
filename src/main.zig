@@ -1,8 +1,8 @@
 const std = @import("std");
 const qoi = @import("qoi.zig");
 
-inline fn strEq(str1: []const u8, str2: []const u8) bool {
-    return str.len == str2.len && std.mem.eql(u8, str1, str2);
+fn strEq(str1: []const u8, str2: []const u8) bool {
+    return str1.len == str2.len and std.mem.eql(u8, str1, str2);
 }
 
 pub fn main() anyerror!void {
@@ -23,11 +23,9 @@ pub fn main() anyerror!void {
             if (args.next(allocator)) |sourceRaw| {
                 if (args.next(allocator)) |destRaw| {
                     const realSource = try std.fs.realpathAlloc(allocator, (try sourceRaw)[0..]);
-                    const realDest   = try std.fs.realpathAlloc(allocator, (try destRaw)[0..]);
+                    const realDest = try std.fs.realpathAlloc(allocator, (try destRaw)[0..]);
 
-                    const source = try std.fs.openFileAbsolute(realSource, std.fs.File.OpenFlags{
-                        .read = true, .write = false
-                    });
+                    const source = try std.fs.openFileAbsolute(realSource, std.fs.File.OpenFlags{ .read = true, .write = false });
                     const dest = try std.fs.createFileAbsolute(realDest, std.fs.File.CreateFlags{
                         .read = false,
                         .truncate = false, // do not append
@@ -45,6 +43,6 @@ pub fn main() anyerror!void {
             return;
         }
     }
-    
+
     try stdout.print("You must supply enc or dec as an arg", .{});
 }

@@ -1,21 +1,7 @@
 const std = @import("std");
 
-// TYPES
-
-// header and pixel are packed so that they can be casted to and from [*]u8 correctly
-// because the fields will always be in the correct order and the correct size
-
-const QoiHeader = packed struct {
-    magic: [4]u8 = "qoif", // magic bytes
-    width: u32,
-    height: u32,
-    channels: u8, // purely informational
-    colorpace: u8, // see above
-};
-
-const Pixel = packed struct { r: u8 = 0, g: u8 = 0, b: u8 = 0, a: u8 = 255 };
-
-// END TYPES
+const types = @import("types.zig");
+const Pixel = types.Pixel;
 
 // UTIL FUNCTIONS
 
@@ -158,9 +144,11 @@ pub fn enc(allocator: std.mem.Allocator, input: []Pixel, length: u32) []u8 {
     return output.items;
 }
 
-pub fn dec(allocator: std.mem.Allocator, input: []u8, length: u32) []Pixel {
+pub fn dec(allocator: std.mem.Allocator, input: types.QoiImage) types.GenericImage {
     const output = std.ArrayList(Pixel).init(allocator);
     const hashTable: [64]?Pixel = undefined;
+
+    const bytes = input.pixels;
 
     var previousPixel = Pixel{};
 
@@ -171,27 +159,27 @@ pub fn dec(allocator: std.mem.Allocator, input: []u8, length: u32) []Pixel {
         previousPixel = output.items[output.items.len - 1];
         hashIfNeeded(hashTable, previousPixel);
     }) {
-        const current = input[index];
+        const current = bytes[index];
 
         if (current == 0xFE) {
             index += 1;
-            const red = input[index];
+            const red = bytes[index];
             index += 1;
-            const blue = input[index];
+            const blue = bytes[index];
             index += 1;
-            const green = input[index];
+            const green = bytes[index];
             output.append(Pixel{ .r = red, .g = green, .b = blue });
         }
 
         else if (current == 0xFF) {
             index += 1;
-            const red = input[index];
+            const red = bytes[index];
             index += 1;
-            const blue = input[index];
+            const blue = bytes[index];
             index += 1;
-            const green = input[index];
+            const green = bytes[index];
             index += 1;
-            const alpha = input[index];
+            const alpha = bytes[index];
             output.append(Pixel{ .r = red, .g = green, .b = blue, .a = alpha });
         }
 
@@ -218,7 +206,7 @@ pub fn dec(allocator: std.mem.Allocator, input: []u8, length: u32) []Pixel {
             const dg = (current & 0b00111111) -% 32;
             
             index += 1;
-            const next = input[index];
+            const next = bytes[index];
 
             const dr = (next & 0b11110000) >> 4 -% 8 +% dg;
             const db = (next & 0b00001111) -% 8 +% dg;
