@@ -17,31 +17,40 @@ pub const QoiImage = packed struct {
     pixels: []u8
 };
 
-pub const BmpImage = packed struct {
-    // header
-    id: [2]u8 = "BM", // magic bytes
-    size: u32,
-    reserved: u32 = 0, // technically two 16 bit fields but who's counting?
-    offset: u32 = 0x0E, // where the pixels start
-    // DIB header
-    // BITMAPINFOHEADER
-    dibSize: u32 = 40,
-    width: i16,
-    height: i16,
-    colorPlanes: u16 = 1, // must be 1
-    bitsPerPixel: u16 = 32,
-    compressionMethod: u32 = 0, // no compression
-    dummyImageSize: u32 = 0, // dummy value since no compression applied
-    widthDensity: i32 = 0,
-    heightDensity: i32 = 0,
-    colorPalette: u32 = 0, // dummy value to use a default
-    importantColorCount: u32 = 0, // even wikipedia calls this "generally ignored" big L
-    // begin pixels FINALLY
-    pixels: []u8
-};
+//pub const BmpImage = packed struct {
+//    // header
+//    id: [2]u8 = "BM", // magic bytes
+//    size: u32,
+//    reserved: u32 = 0, // technically two 16 bit fields but who's counting?
+//    offset: u32 = 0x0E, // where the pixels start
+//    // DIB header
+//    // BITMAPV4HEADER
+//    dibSize: u32 = 108,
+//    width: u32,
+//    height: u32,
+//    colorPlanes: u16 = 1, // must be 1
+//    bitsPerPixel: u16 = 32,
+//    biBitfields: u32 = 3, // no compression
+//    rawBitmapSize: u32,
+//    widthDensity: i32 = 0,
+//    heightDensity: i32 = 0,
+//    colorPalette: u32 = 0, // dummy value to use a default
+//    importantColorCount: u32 = 0, // even wikipedia calls this "generally ignored" big L
+//    redBitmask:   u32 = 0x00FF0000,
+//    blueBitmask:  u32 = 0x0000FF00,
+//    greenBitmask: u32 = 0x000000FF,
+//    alphaBitmask: u32 = 0xFF000000,
+//    lcsWindowsColorSpace: [4]u8 = "Win ",
+//    ciexyztripleEndpoints: [24]u8 = undefined,
+//    gammaRed: u32 = 0, // endpoints and gamma unused
+//    gammaGreen: u32 = 0,
+//    gammaBlue: u32 = 0,
+//    // begin pixels FINALLY
+//    pixels: []u8
+//};
 
 pub const GenericImage = struct {
     width: u32,
     height: u32,
-    pixels: []Pixel
+    pixels: [:0]Pixel
 };
