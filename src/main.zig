@@ -1,5 +1,5 @@
 const std = @import("std");
-const qoi = @import("qoi.zig");
+const convert = @import("convert.zig");
 
 fn strEq(str1: []const u8, str2: []const u8) bool {
     return str1.len == str2.len and std.mem.eql(u8, str1, str2);
@@ -25,16 +25,12 @@ pub fn main() anyerror!void {
                     const realSource = try std.fs.realpathAlloc(allocator, (try sourceRaw)[0..]);
                     const realDest = try std.fs.realpathAlloc(allocator, (try destRaw)[0..]);
 
-                    const source = try std.fs.openFileAbsolute(realSource, std.fs.File.OpenFlags{ .read = true, .write = false });
-                    const dest = try std.fs.createFileAbsolute(realDest, std.fs.File.CreateFlags{
-                        .read = false,
-                        .truncate = false, // do not append
-                        .exclusive = false,
-                    });
+                    if (encMode) {
+                        try convert.img2qoi(allocator, realSource, realDest);
+                    } else {
+                        try convert.qoi2bmp(allocator, realSource, realDest);
+                    }
 
-                    _ = source;
-                    _ = dest;
-                    _ = encMode;
                     return;
                 }
             }

@@ -14,7 +14,7 @@ pub const QoiImage = packed struct {
     height: u32,
     channels: u8, // purely informational
     colorspace: u8, // see above
-    pixels: []u8
+    pixels: [*]u8
 };
 
 //pub const BmpImage = packed struct {
@@ -52,5 +52,5 @@ pub const QoiImage = packed struct {
 pub const GenericImage = struct {
     width: u32,
     height: u32,
-    pixels: [:0]Pixel
+    pixels: []Pixel
 };

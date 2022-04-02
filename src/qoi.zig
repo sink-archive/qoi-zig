@@ -16,12 +16,6 @@ inline fn hash(pix: Pixel) u8 {
         @intCast(u16, pix.a) * 11) % 64);
 }
 
-inline fn hashIfNeeded(table: [64]?Pixel, pix: Pixel) void {
-    const hashed = hash(pix);
-    if (table[hashed] == null)
-        table[hashed] = pix;
-}
-
 // END UTIL FUNCTIONS
 
 // EMITTER FUNCTIONS
@@ -76,26 +70,28 @@ inline fn emitRun(length: u8) ?u8 {
 }
 
 // if same as at hash in prevSeen
-inline fn emitIndex(table: [64]Pixel, pix: Pixel) ?u8 {
+inline fn emitIndex(table: [64]?Pixel, pix: Pixel) ?u8 {
     const hashed = hash(pix);
     const prev = table[hashed];
-    if (pixelsEq(prev, pix))
-        return hashed;
+    if (prev) |prevExists|
+        if (pixelsEq(prevExists, pix))
+            return hashed;
+
     return null;
 }
 
 inline fn tryEmitBestRaw(lastA: u8, pix: Pixel) []u8 {
     if (emitRGB(lastA, pix)) |rgb|
-        return rgb;
-    return emitRGBA(pix);
+        return rgb[0..];
+    return emitRGBA(pix)[0..];
 }
 
 // END EMITTER FUNCTIONS
 
 // the image may have at most ~4.29 billion pixels
-pub fn enc(allocator: std.mem.Allocator, input: []Pixel, length: u32) []u8 {
-    const output = std.ArrayList(u8).init(allocator);
-    const hashTable: [64]?Pixel = undefined;
+pub fn enc(allocator: std.mem.Allocator, input: []Pixel, length: u32) ![]u8 {
+    var output = std.ArrayList(u8).init(allocator);
+    var hashTable: [64]?Pixel = undefined;
 
     var previousPixel = Pixel{};
     var preRunLengthA: u8 = 255;
@@ -104,13 +100,16 @@ pub fn enc(allocator: std.mem.Allocator, input: []Pixel, length: u32) []u8 {
 
     while (index < length) : ({
         index += 1;
+
         if (runLength == 1)
             preRunLengthA = previousPixel.a;
         previousPixel = input[index - 1];
+
+        const hashed = hash(previousPixel);
+        if (hashTable[hashed] == null)
+            hashTable[hashed] = previousPixel;
     }) {
         const currentPixel = input[index];
-
-        hashIfNeeded(hashTable, currentPixel);
 
         if (pixelsEq(previousPixel, currentPixel)) {
             runLength += 1;
@@ -121,32 +120,32 @@ pub fn enc(allocator: std.mem.Allocator, input: []Pixel, length: u32) []u8 {
             // run length has ended, emit it and continue with the next pixel
             while (runLength > 0) : (runLength -= 1) {
                 if (emitRun(runLength)) |byte| {
-                    output.append(byte);
+                    try output.append(byte);
                     break;
                 }
-                output.appendSlice(tryEmitBestRaw(preRunLengthA, previousPixel));
+                try output.appendSlice(tryEmitBestRaw(preRunLengthA, previousPixel));
             }
             runLength = 0;
         }
 
         // order of preference: run (already covered), index, diff, luma, raw
         if (emitIndex(hashTable, currentPixel)) |byte| {
-            output.append(byte);
+            try output.append(byte);
         } else if (emitDiff(previousPixel, currentPixel)) |byte| {
-            output.append(byte);
+            try output.append(byte);
         } else if (emitLuma(previousPixel, currentPixel)) |bytes| {
-            output.appendSlice(bytes);
+            try output.appendSlice(bytes[0..]);
         } else {
-            output.appendSlice(tryEmitBestRaw(previousPixel.a, currentPixel));
+            try output.appendSlice(tryEmitBestRaw(previousPixel.a, currentPixel));
         }
     }
 
     return output.items;
 }
 
-pub fn dec(allocator: std.mem.Allocator, input: types.QoiImage) types.GenericImage {
-    const output = std.ArrayList(Pixel).init(allocator);
-    const hashTable: [64]?Pixel = undefined;
+pub fn dec(allocator: std.mem.Allocator, input: types.QoiImage) !types.GenericImage {
+    var output = std.ArrayList(Pixel).init(allocator);
+    var hashTable: [64]?Pixel = undefined;
 
     const bytes = input.pixels;
 
@@ -154,10 +153,13 @@ pub fn dec(allocator: std.mem.Allocator, input: types.QoiImage) types.GenericIma
 
     var index: u32 = 0;
 
-    while (index < length) : ({
+    while (index < (input.width * input.height * 4)) : ({
         index += 1;
         previousPixel = output.items[output.items.len - 1];
-        hashIfNeeded(hashTable, previousPixel);
+
+        const hashed = hash(previousPixel);
+        if (hashTable[hashed] == null)
+            hashTable[hashed] = previousPixel;
     }) {
         const current = bytes[index];
 
@@ -168,10 +170,8 @@ pub fn dec(allocator: std.mem.Allocator, input: types.QoiImage) types.GenericIma
             const blue = bytes[index];
             index += 1;
             const green = bytes[index];
-            output.append(Pixel{ .r = red, .g = green, .b = blue });
-        }
-
-        else if (current == 0xFF) {
+            try output.append(Pixel{ .r = red, .g = green, .b = blue });
+        } else if (current == 0xFF) {
             index += 1;
             const red = bytes[index];
             index += 1;
@@ -180,51 +180,51 @@ pub fn dec(allocator: std.mem.Allocator, input: types.QoiImage) types.GenericIma
             const green = bytes[index];
             index += 1;
             const alpha = bytes[index];
-            output.append(Pixel{ .r = red, .g = green, .b = blue, .a = alpha });
+            try output.append(Pixel{ .r = red, .g = green, .b = blue, .a = alpha });
         }
 
         if ((current & 0b11000000) == 0) {
             // index
             const i = current & 0b00111111;
-            output.append(hashTable[i]);
-        }
-
-        else if ((current & 0b11000000) == (1 << 6)) {
+            if (hashTable[i]) |hashedPixel| {
+                try output.append(hashedPixel);
+            } else unreachable;
+        } else if ((current & 0b11000000) == (1 << 6)) {
             // diff
             const dr = (current & 0b00110000) >> 4 +% 2; // remove bias
             const dg = (current & 0b00001100) >> 2 +% 2;
             const db = (current & 0b00000011) +% 2;
-            output.append(Pixel{
+            try output.append(Pixel{
                 .r = previousPixel.r + dr,
                 .g = previousPixel.g + dg,
                 .b = previousPixel.b + db,
             });
-        }
-
-        else if ((current & 0b11000000) == (1 << 7)) {
+        } else if ((current & 0b11000000) == (1 << 7)) {
             // luma
             const dg = (current & 0b00111111) -% 32;
-            
+
             index += 1;
             const next = bytes[index];
 
-            const dr = (next & 0b11110000) >> 4 -% 8 +% dg;
+            const dr = ((next & 0b11110000) >> 4) -% 8 +% dg;
             const db = (next & 0b00001111) -% 8 +% dg;
-            output.append(Pixel{
+            try output.append(Pixel{
                 .r = previousPixel.r + dr,
                 .g = previousPixel.g + dg,
                 .b = previousPixel.b + db,
             });
-        }
-
-        else if ((current & 0b11000000) == (0b11 << 6)) {
+        } else if ((current & 0b11000000) == (0b11 << 6)) {
             // run
             var len = current & 0b00111111;
             while (len > 0) : (len -= 1) {
-                output.append(previousPixel);
+                try output.append(previousPixel);
             }
         }
     }
 
-    return output.items;
+    return types.GenericImage{
+        .width = input.width,
+        .height = input.height,
+        .pixels = output.items,
+    };
 }
